@@ -1,4 +1,5 @@
 use bevy::prelude::*;
+use std::ops::Div;
 
 const SPRITE_SIZE: f32 = 100.0;
 const MOVE_SPEED: f32 = 500.0;
@@ -58,7 +59,7 @@ fn character_movement(
         if up(&input) && (left(&input) || right(&input))
             || down(&input) && (left(&input) || right(&input))
         {
-            movement_amount = (((player.speed).powf(2.0))/2.0).sqrt() * time.delta_seconds();
+            movement_amount = player.speed.powf(2.0).div(2.0).sqrt() * time.delta_seconds();
         }
 
         if up(&input) {
