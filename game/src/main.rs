@@ -1,12 +1,19 @@
-use bevy::prelude::*;
+use bevy::{prelude::*, render::camera::ScalingMode};
 use std::ops::Div;
 
-const SPRITE_SIZE: f32 = 100.0;
-const MOVE_SPEED: f32 = 500.0;
+const MOVE_SPEED: f32 = 300.0;
 
 #[derive(Component)]
 pub struct Player {
     pub speed: f32,
+}
+
+#[derive(Resource)]
+pub struct Money(pub f32);
+
+#[derive(Component)]
+pub struct Pig {
+    pub lifetime: Timer,
 }
 
 fn main() {
@@ -25,22 +32,25 @@ fn main() {
                 })
                 .build(),
         )
+        .insert_resource(Money(100.0))
         .add_systems(Startup, setup)
-        .add_systems(Update, character_movement)
+        .add_systems(Update, (character_movement, spawn_pig, pig_lifetime))
         .run();
 }
 
 fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
-    commands.spawn(Camera2dBundle::default());
+    let mut camera = Camera2dBundle::default();
+    camera.projection.scaling_mode = ScalingMode::AutoMin {
+        min_width: 256.0,
+        min_height: 144.0,
+    };
+
+    commands.spawn(camera);
 
     let texture = asset_server.load("character.png");
 
     commands.spawn((
         SpriteBundle {
-            sprite: Sprite {
-                custom_size: Some(Vec2::new(SPRITE_SIZE, SPRITE_SIZE)),
-                ..default()
-            },
             texture,
             ..default()
         },
@@ -94,4 +104,51 @@ fn left(input: &Res<Input<KeyCode>>) -> bool {
 
 fn right(input: &Res<Input<KeyCode>>) -> bool {
     input.pressed(KeyCode::D) || input.pressed(KeyCode::Right)
+}
+
+fn spawn_pig(
+    mut commands: Commands,
+    asset_server: Res<AssetServer>,
+    input: Res<Input<KeyCode>>,
+    mut money: ResMut<Money>,
+    player: Query<&Transform, With<Player>>,
+) {
+    if !input.just_pressed(KeyCode::Space) || money.0 < 10.0 {
+        return;
+    }
+
+    money.0 -= 10.0;
+    info!("Spent $10 on a pig, remaining money: {}", money.0);
+
+    let player_transform = player.single();
+
+    let texture = asset_server.load("pig.png");
+    commands.spawn((
+        SpriteBundle {
+            texture,
+            transform: *player_transform,
+            ..default()
+        },
+        Pig {
+            lifetime: Timer::from_seconds(2.0, TimerMode::Once),
+        },
+    ));
+}
+
+fn pig_lifetime(
+    mut commands: Commands,
+    time: Res<Time>,
+    mut pigs: Query<(Entity, &mut Pig)>,
+    mut money: ResMut<Money>,
+) {
+    for (pig_entity, mut pig) in &mut pigs {
+        pig.lifetime.tick(time.delta());
+
+        if pig.lifetime.finished() {
+            money.0 += 15.0;
+            commands.entity(pig_entity).despawn();
+
+            info!("Sold pig for $15, remaining money: {}", money.0);
+        }
+    }
 }
